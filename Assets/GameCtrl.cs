@@ -12,7 +12,7 @@ public class GameCtrl : MonoBehaviour
 
     private MyColliderCylinder playerColliderCylinder = new MyColliderCylinder();
     private Vector3 inputDir;
-
+    
     private void Start()
     {
         playerColliderCylinder.name = "CylinderPlayer";
@@ -34,10 +34,8 @@ public class GameCtrl : MonoBehaviour
         var moveOffset = inputDir * speed;
         playerColliderCylinder.pos += moveOffset;
 
-        Vector3 adjustVector3 = Vector3.zero;
-        PhysxWorld.Instance().ColliderSimulation(playerColliderCylinder, ref moveOffset, out adjustVector3);
-
-        playerColliderCylinder.pos += adjustVector3 + moveOffset;
+        PhysxWorld.Instance().ColliderSimulation(playerColliderCylinder, moveOffset);
+        
         goTransform.position = playerColliderCylinder.pos;
 
         PhysxWorld.Instance().isSimulate = false;

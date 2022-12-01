@@ -15,6 +15,7 @@ namespace MyPhysx
     {
         public string name;
         public Vector3 pos;
+        public bool isStop = false;
         //public ColliderType colliderType;
 
         public virtual bool DetectBoxCollision(MyColliderBox box, ref Vector3 adjustOffset) { return false; }
@@ -69,7 +70,7 @@ namespace MyPhysx
             var a = offset.normalized;
             var b = (radius + cylinder.radius - offset.magnitude);
             adjustVector3 = offset.normalized * (radius + cylinder.radius - offset.magnitude);
-            Debug.Log(a + " / " + b + " / " + adjustVector3);
+            //Debug.Log(a + " / " + b + " / " + adjustVector3);
             return true;
         }
     }
@@ -81,7 +82,6 @@ namespace MyPhysx
     {
         public Vector3 adjustVector3;
     }
-
 
     //Physical Environment
     public class PhysxWorld
@@ -95,9 +95,9 @@ namespace MyPhysx
 
         public void AddCollider(MyColliderBase colliderBase)
         {
-            if(colliderDict.ContainsKey(colliderBase.name) == true)
+            if (colliderDict.ContainsKey(colliderBase.name) == true)
                 Debug.Log("Already exist: " + colliderBase.name);
-           
+
             colliderDict[colliderBase.name] = colliderBase;
         }
         public static PhysxWorld Instance()
@@ -105,136 +105,130 @@ namespace MyPhysx
             return instance;
         }
 
-        public void ColliderSimulation(MyColliderBase player, ref Vector3 moveOffset, out Vector3 adjustVector3)
+        public void ColliderSimulation(MyColliderBase player, Vector3 moveOffset)
         {
             collisionInfoList.Clear();
-            adjustVector3 = Vector3.zero;
+            var adjustVector3 = Vector3.zero;
 
             foreach (MyColliderBase colliderBase in colliderDict.Values)
             {
-                if(colliderBase is MyColliderBox)
+                if (colliderBase is MyColliderBox)
                 {
                     if (player.DetectBoxCollision((MyColliderBox)colliderBase, ref adjustVector3) == false)
                         continue;
 
                     var info = new CollisionInfo();
-                    info.adjustVector3 = adjustVector3;
+                    info.adjustVector3 = adjustVector3;  
                     collisionInfoList.Add(info);
                 }
-
+                   
                 if (colliderBase is MyColliderCylinder)
                 {
                     if (player.DetectCylinderCollision((MyColliderCylinder)colliderBase, ref adjustVector3) == false)
                         continue;
 
-                    var info = new CollisionInfo();
+                    var info = new CollisionInfo(); 
                     info.adjustVector3 = adjustVector3;
                     collisionInfoList.Add(info);
                 }
+            }
 
-                if (collisionInfoList.Count == 0)
-                {
-                    adjustVector3 = Vector3.zero;
-                    moveOffset = Vector3.zero;
-                    return;
-                }
-
-                var middleNormal = CalculateMiddleNormal(collisionInfoList);
-                var maxAngle = CalculateMaxAngle(middleNormal, collisionInfoList);
-                var angle = Vector3.Angle(-moveOffset, middleNormal); //important!!!
-                
-                Debug.Log(maxAngle + "   " + angle);
-
-                if(angle > maxAngle)
-                {
-                    Debug.Log("Angle says you can move!");
-                    //BUG!!
-                    //project move offset!
-                    var minAngleVec = FindMinAngleVector3(-moveOffset, collisionInfoList);
-                    moveOffset = Vector3.zero;
-                    adjustVector3 = CalculateMiddleVector3(collisionInfoList);
-                    return;
-                }
-
-                Debug.Log("Angle says you can NOT move!");
-                moveOffset = Vector3.zero;
-                adjustVector3 = CalculateMiddleVector3(collisionInfoList);
-
+            if (collisionInfoList.Count == 0)
                 return;
 
-                if (collisionInfoList.Count > 0)
-                {
-                    var temp = collisionInfoList[0];
-                    var angle1 = Vector3.Angle(adjustVector3, moveOffset);
-                    if(angle1 > 90)
-                    {
-                        Debug.Log("before: " + moveOffset);
-                        Debug.Log(adjustVector3);
-                        var projection = Vector3.Dot(moveOffset, adjustVector3.normalized) * adjustVector3.normalized;
-                        moveOffset -= projection;
-                        
-                        Debug.Log("after: " + moveOffset);
-                    }
-                }
+            //reset to original position
+            player.pos -= moveOffset;
 
-                Vector3 CalculateMiddleVector3(List<CollisionInfo> infoList)
-                {
-                    Vector3 middleVector3 = Vector3.zero;
+            var middleNormal = CalculateMiddleNormal(collisionInfoList);
+            var maxAngle = CalculateMaxAngle(middleNormal, collisionInfoList);
+            var angle = Vector3.Angle(-moveOffset, middleNormal); //important!!!
+            var adjustVec = CalculateMiddleVector3(collisionInfoList);
 
-                    if (infoList.Count == 0)
-                        return middleVector3;
-
-                    for (int i = 0; i < infoList.Count; i++)
-                        middleVector3 += infoList[i].adjustVector3;
-
-                    return middleVector3 /= infoList.Count;
-                }
-
-                Vector3 CalculateMiddleNormal(List<CollisionInfo> infoList)
-                {
-                    Vector3 middleVector3 = Vector3.zero;
-
-                    if (infoList.Count == 0)
-                        return middleVector3;
-
-                    for (int i = 0; i < infoList.Count; i++)
-                        middleVector3 += infoList[i].adjustVector3.normalized;
-
-                    return middleVector3 /= infoList.Count;
-                }
-
-                float CalculateMaxAngle(Vector3 normal, List<CollisionInfo> infoList)
-                {
-                    float maxAngle = 0f;
-
-                    for (int i = 0; i < infoList.Count; i++)
-                    {
-                        var angle = Vector3.Angle(normal, infoList[i].adjustVector3);
-                        maxAngle = maxAngle < angle ? angle : maxAngle;
-                    }
-
-                    return maxAngle;
-                }
-
-                Vector3 FindMinAngleVector3(Vector3 normal, List<CollisionInfo> infoList)
-                {
-                    float minxAngle = 360f;
-                    Vector3 minAngleVec = Vector3.zero;
-
-                    for (int i = 0; i < infoList.Count; i++)
-                    {
-                        var angle = Vector3.Angle(normal, infoList[i].adjustVector3);
-                        if (minxAngle < angle)
-                            continue;
-
-                        minxAngle = angle;
-                        minAngleVec = infoList[i].adjustVector3;
-                    }
-
-                    return minAngleVec;
-                }
+            //Debug.Log("angle: " + angle + " / " + maxAngle);
+            if (angle <= maxAngle)
+            {
+                if (player.isStop == false)
+                    player.pos = player.pos + adjustVec + moveOffset;
+                
+                Debug.Log(adjustVec.ToString("f6") + "Can not go!");
+                player.isStop = true;
+                
+                return;
             }
+
+            player.isStop = false;
+            Debug.Log("cAN GO" + moveOffset.ToString("f6") + " //" + adjustVec.ToString("f6"));
+            player.pos = player.pos + adjustVec + moveOffset;
+            return;
+
+            if (angle > maxAngle)
+            {
+                Debug.Log("Angle says you can move!");
+                var minAngleNormal = FindMinAngleVector3(-moveOffset, collisionInfoList);
+                minAngleNormal = minAngleNormal.normalized;
+
+                var projection = Vector3.Dot(-moveOffset, minAngleNormal) * -minAngleNormal; //important!!!
+                ///moveOffset -= projection;
+            }
+        }
+
+        Vector3 CalculateMiddleVector3(List<CollisionInfo> infoList)
+        {
+            Vector3 middleVector3 = Vector3.zero;
+
+            if (infoList.Count == 0)
+                return middleVector3;
+
+            for (int i = 0; i < infoList.Count; i++)
+                middleVector3 += infoList[i].adjustVector3;
+
+            return middleVector3;// /= infoList.Count; 
+        }
+
+        Vector3 CalculateMiddleNormal(List<CollisionInfo> infoList)
+        {
+            Vector3 middleVector3 = Vector3.zero;
+
+            if (infoList.Count == 0)
+                return middleVector3;
+
+            for (int i = 0; i < infoList.Count; i++)
+                middleVector3 += infoList[i].adjustVector3.normalized;
+
+            return middleVector3 /= infoList.Count;
+        }
+
+        float CalculateMaxAngle(Vector3 normal, List<CollisionInfo> infoList)
+        {
+            float maxAngle = 0f;
+
+            for (int i = 0; i < infoList.Count; i++)
+            {
+                var angle = Vector3.Angle(normal, infoList[i].adjustVector3);
+                maxAngle = maxAngle < angle ? angle : maxAngle;
+            }
+
+            return maxAngle; 
+        }
+
+        Vector3 FindMinAngleVector3(Vector3 normal, List<CollisionInfo> infoList)
+        {
+            float minxAngle = 360f;
+            Vector3 minAngleVec = Vector3.zero;
+
+            for (int i = 0; i < infoList.Count; i++)
+            {
+                var angle = Vector3.Angle(normal, infoList[i].adjustVector3);
+                if (minxAngle < angle)
+                    continue;
+
+                minxAngle = angle;
+                minAngleVec = infoList[i].adjustVector3;
+            }
+
+            return minAngleVec;
         }
     }
 }
+
 
